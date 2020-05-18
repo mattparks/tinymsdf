@@ -20,7 +20,6 @@ typedef int tinymsdf_error_t;
 
 enum {
 	TINYMSDF_SUCCESS,
-	TINYMSDF_NOMEM,
 	TINYMSDF_GLYPH_LOAD,
 	TINYMSDF_OUTLINE_DECOMPOSE
 };
