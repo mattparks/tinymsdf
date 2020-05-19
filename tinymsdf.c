@@ -17,11 +17,22 @@ vec2 vec2_add(vec2 a, vec2 b) {
 	return (vec2){a.x + b.x, a.y + b.y};
 }
 
+vec2 vec2_sub(vec2 a, vec2 b) {
+	return (vec2){a.x - b.x, a.y - b.y};
+}
+
 vec2 vec2_mul(float a, vec2 b) {
 	return (vec2) {a * b.x, a * b.y};
 }
 
-int vec2_equal(vec2 a, vec2 b) {
+vec2 vec2_mix(vec2 a, vec2 b, float weight) {
+	vec2 r;
+	r.x = (1 - weight) * a.x + weight * b.x;
+	r.y = (1 - weight) * a.y + weight * b.y;
+	return r;
+}
+
+int vec2_eql(vec2 a, vec2 b) {
 	return a.x == b.x && a.y == b.y;
 }
 
@@ -52,31 +63,75 @@ typedef struct {
 	vec2 p[4];
 } edge_segment_t;
 
-edge_segment_t edge_segment_linear(vec2 p0, vec2 p1) {
-	edge_segment_t edge_segment = {EDGE_COLOR_WHITE, EDGE_TYPE_LINEAR};
+edge_segment_t edge_segment_linear(vec2 p0, vec2 p1, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+	edge_segment_t edge_segment = {color, EDGE_TYPE_LINEAR};
 	edge_segment.p[0] = p0;
 	edge_segment.p[1] = p1;
 	return edge_segment;
 }
 
-edge_segment_t edge_segment_quadradic(vec2 p0, vec2 p1, vec2 p2) {
-	if (vec2_equal(p1, p0) || vec2_equal(p1, p2))
+edge_segment_t edge_segment_quadratic(vec2 p0, vec2 p1, vec2 p2, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+	if (vec2_eql(p1, p0) || vec2_eql(p1, p2))
 		p1 = vec2_mul(0.5f, vec2_add(p0, p2));
 	
-	edge_segment_t edge_segment = {EDGE_COLOR_WHITE, EDGE_TYPE_QUADRATIC};
+	edge_segment_t edge_segment = {color, EDGE_TYPE_QUADRATIC};
 	edge_segment.p[0] = p0;
 	edge_segment.p[1] = p1;
 	edge_segment.p[2] = p2;
 	return edge_segment;
 }
 
-edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
-	edge_segment_t edge_segment = {EDGE_COLOR_WHITE, EDGE_TYPE_CUBIC};
+edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+	edge_segment_t edge_segment = {color, EDGE_TYPE_CUBIC};
 	edge_segment.p[0] = p0;
 	edge_segment.p[1] = p1;
 	edge_segment.p[2] = p2;
 	edge_segment.p[3] = p3;
 	return edge_segment;
+}
+
+vec2 edge_segment_point(const edge_segment_t *edge, float param) {
+	switch (edge->type) {
+	case EDGE_TYPE_LINEAR:
+		return vec2_mix(edge->p[0], edge->p[1], param);
+	case EDGE_TYPE_QUADRATIC:
+		return vec2_mix(vec2_mix(edge->p[0], edge->p[1], param), vec2_mix(edge->p[1], edge->p[2], param), param);
+	case EDGE_TYPE_CUBIC:
+	{
+		vec2 p12 = vec2_mix(edge->p[1], edge->p[2], param);
+		return vec2_mix(vec2_mix(vec2_mix(edge->p[0], edge->p[1], param), p12, param), vec2_mix(p12, vec2_mix(edge->p[2], edge->p[3], param), param), param);
+	}
+	}
+}
+
+/// Splits the edge segments into thirds which together represent the original edge.
+void edge_segment_split_in_thirds(const edge_segment_t *src, edge_segment_t *part1, edge_segment_t *part2, edge_segment_t *part3) {
+	switch (src->type) {
+	case EDGE_TYPE_LINEAR:
+	{
+		*part1 = edge_segment_linear(src->p[0], edge_segment_point(src, 1 / 3.0), src->color);
+		*part2 = edge_segment_linear(edge_segment_point(src, 1 / 3.0), edge_segment_point(src, 2 / 3.0), src->color);
+		*part3 = edge_segment_linear(edge_segment_point(src, 2 / 3.0), src->p[1], src->color);
+		break;
+	}
+	case EDGE_TYPE_QUADRATIC:
+	{
+		*part1 = edge_segment_quadratic(src->p[0], vec2_mix(src->p[0], src->p[1], 1 / 3.0), edge_segment_point(src, 1 / 3.0), src->color);
+		*part2 = edge_segment_quadratic(edge_segment_point(src, 1 / 3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 5 / 9.0), vec2_mix(src->p[1], src->p[2], 4 / 9.0), 0.5), edge_segment_point(src, 2 / 3.0), src->color);
+		*part3 = edge_segment_quadratic(edge_segment_point(src, 2 / 3.0), vec2_mix(src->p[1], src->p[2], 2 / 3.0), src->p[2], src->color);
+		break;
+	}
+	case EDGE_TYPE_CUBIC:
+	{
+		*part1 = edge_segment_cubic(src->p[0], vec2_eql(src->p[0], src->p[1]) ? src->p[0] : vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(src->p[1], src->p[2], 1 / 3.0), 1 / 3.0), edge_segment_point(src, 1 / 3.0), src->color);
+		*part2 = edge_segment_cubic(edge_segment_point(src, 1 / 3.0),
+			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(src->p[1], src->p[2], 1 / 3.0), 1 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 1 / 3.0), vec2_mix(src->p[2], src->p[3], 1 / 3.0), 1 / 3.0), 2 / 3.0),
+			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 2 / 3.0), vec2_mix(src->p[1], src->p[2], 2 / 3.0), 2 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2 / 3.0), vec2_mix(src->p[2], src->p[3], 2 / 3.0), 2 / 3.0), 1 / 3.0),
+			edge_segment_point(src, 2 / 3.0), src->color);
+		*part3 = edge_segment_cubic(edge_segment_point(src, 2 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2 / 3.0), vec2_mix(src->p[2], src->p[3], 2 / 3.0), 2 / 3.0), vec2_eql(src->p[2], src->p[3]) ? src->p[3] : vec2_mix(src->p[2], src->p[3], 2 / 3.0), src->p[3], src->color);
+		break;
+	}
+	}
 }
 
 typedef struct {
@@ -143,8 +198,8 @@ int tinymsdf_line_to(const FT_Vector *to, void *user)
 {
 	context_t *context = user;
 	vec2 endpoint = ftPoint2(to);
-	if (!vec2_equal(endpoint, context->position)) {
-		contour_add_edge(context->contour, edge_segment_linear(context->position, endpoint));
+	if (!vec2_eql(endpoint, context->position)) {
+		contour_add_edge(context->contour, edge_segment_linear(context->position, endpoint, EDGE_COLOR_WHITE));
 		context->position = endpoint;
 	}
 	return 0;
@@ -153,7 +208,7 @@ int tinymsdf_line_to(const FT_Vector *to, void *user)
 int tinymsdf_conic_to(const FT_Vector *control, const FT_Vector *to, void *user)
 {
 	context_t *context = user;
-	contour_add_edge(context->contour, edge_segment_quadradic(context->position, ftPoint2(control), ftPoint2(to)));
+	contour_add_edge(context->contour, edge_segment_quadratic(context->position, ftPoint2(control), ftPoint2(to), EDGE_COLOR_WHITE));
 	context->position = ftPoint2(to);
 	return 0;
 }
@@ -161,7 +216,7 @@ int tinymsdf_conic_to(const FT_Vector *control, const FT_Vector *to, void *user)
 int tinymsdf_cubic_to(const FT_Vector *control1, const FT_Vector *control2, const FT_Vector *to, void *user)
 {
 	context_t *context = user;
-	contour_add_edge(context->contour, edge_segment_cubic(context->position, ftPoint2(control1), ftPoint2(control2), ftPoint2(to)));
+	contour_add_edge(context->contour, edge_segment_cubic(context->position, ftPoint2(control1), ftPoint2(control2), ftPoint2(to), EDGE_COLOR_WHITE));
 	context->position = ftPoint2(to);
 	return 0;
 }
@@ -189,6 +244,33 @@ tinymsdf_error_t tinymsdf_load_glyph(shape_t *shape, FT_Face face, unicode_t uni
 	if (error)
 		return TINYMSDF_OUTLINE_DECOMPOSE;
 
+	/// Performs basic checks to determine if the object represents a valid shape.
+	for (int i = 0; i < shape->contour_count; i++) {
+		contour_t *contour = &shape->contours[i];
+		if (contour->edge_count != 0) {
+			vec2 corner = edge_segment_point(&contour->edges[contour->edge_count - 1], 1);
+			for (int j = 0; j < contour->edge_count; j++) {
+				edge_segment_t *edge = &contour->edges[j];
+				if (!vec2_eql(edge_segment_point(edge, 0), corner))
+					return TINYMSDF_INVALID_GEOMETRY;
+				corner = edge_segment_point(edge, 1);
+			}
+		}
+	}
+	
+	/// Normalizes the shape geometry for distance field generation.
+	for (int i = 0; i < shape->contour_count; i++) {
+		contour_t *contour = &shape->contours[i];
+		if (contour->edge_count == 1) {
+			edge_segment_t parts[3];
+			edge_segment_split_in_thirds(&contour->edges[0], &parts[0], &parts[1], &parts[2]);
+			free_contour(contour);
+			contour_add_edge(contour, parts[0]);
+			contour_add_edge(contour, parts[1]);
+			contour_add_edge(contour, parts[2]);
+		}
+	}
+
 	return TINYMSDF_SUCCESS;
 }
 
@@ -198,42 +280,18 @@ tinymsdf_error_t tinymsdf_create_bitmap(float **pixels, int width, int height, i
 	return TINYMSDF_SUCCESS;
 }
 
-void tinymsdf_print_shape(shape_t *shape) {
-	printf("shape:\n");
-	for (int i = 0; i < shape->contour_count; i++) {
-		printf("contour:\n");
-		for (int j = 0; j < shape->contours[i].edge_count; j++) {
-			printf("edge:\n");
-			switch (shape->contours[i].edges[j].type) {
-			case EDGE_TYPE_LINEAR:
-				printf(" type=linear\n");
-				break;
-			case EDGE_TYPE_QUADRATIC:
-				printf(" type=quadratic\n");
-				break;
-			case EDGE_TYPE_CUBIC:
-				printf(" type=cubic\n");
-				break;
-			}
-		}
-	}
-}
-
 tinymsdf_error_t tinymsdf_generate_mtsdf(float *pixels, int width, int height, FT_Face face, unicode_t unicode)
 {
 	shape_t shape = {NULL, 0};
 	tinymsdf_error_t error = tinymsdf_load_glyph(&shape, face, unicode);
-	if (error) {
-		free_shape(&shape);
-		return error;
-	}
-	tinymsdf_print_shape(&shape);
+	if (error)
+		goto error_exit;
 
 	error = tinymsdf_create_bitmap(&pixels, width, height, 4);
-	if (error) {
-		free_shape(&shape);
-		return error;
-	}
-	
-	return TINYMSDF_SUCCESS;
+	if (error)
+		goto error_exit;
+
+error_exit:
+	free_shape(&shape);
+	return error;
 }

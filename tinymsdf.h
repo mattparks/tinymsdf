@@ -21,7 +21,8 @@ typedef int tinymsdf_error_t;
 enum {
 	TINYMSDF_SUCCESS,
 	TINYMSDF_GLYPH_LOAD,
-	TINYMSDF_OUTLINE_DECOMPOSE
+	TINYMSDF_OUTLINE_DECOMPOSE,
+	TINYMSDF_INVALID_GEOMETRY
 };
 
 /// Generates a conventional single-channel signed distance field.
