@@ -10,25 +10,25 @@
 #endif
 
 typedef struct {
-	float x, y;
+	double x, y;
 } vec2;
 
 vec2 vec2_add(vec2 a, vec2 b) {
-	return (vec2){a.x + b.x, a.y + b.y};
+	return (vec2){a.x+b.x, a.y+b.y};
 }
 
 vec2 vec2_sub(vec2 a, vec2 b) {
-	return (vec2){a.x - b.x, a.y - b.y};
+	return (vec2){a.x-b.x, a.y-b.y};
 }
 
-vec2 vec2_mul(float a, vec2 b) {
-	return (vec2) {a * b.x, a * b.y};
+vec2 vec2_mul(double a, vec2 b) {
+	return (vec2) {a*b.x, a*b.y};
 }
 
-vec2 vec2_mix(vec2 a, vec2 b, float weight) {
+vec2 vec2_mix(vec2 a, vec2 b, double weight) {
 	vec2 r;
-	r.x = (1 - weight) * a.x + weight * b.x;
-	r.y = (1 - weight) * a.y + weight * b.y;
+	r.x = (1-weight)*a.x+weight*b.x;
+	r.y = (1-weight)*a.y+weight*b.y;
 	return r;
 }
 
@@ -90,7 +90,7 @@ edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3, edge_color
 	return edge_segment;
 }
 
-vec2 edge_segment_point(const edge_segment_t *edge, float param) {
+vec2 edge_segment_point(const edge_segment_t *edge, double param) {
 	switch (edge->type) {
 	case EDGE_TYPE_LINEAR:
 		return vec2_mix(edge->p[0], edge->p[1], param);
@@ -109,26 +109,26 @@ void edge_segment_split_in_thirds(const edge_segment_t *src, edge_segment_t *par
 	switch (src->type) {
 	case EDGE_TYPE_LINEAR:
 	{
-		*part1 = edge_segment_linear(src->p[0], edge_segment_point(src, 1 / 3.0), src->color);
-		*part2 = edge_segment_linear(edge_segment_point(src, 1 / 3.0), edge_segment_point(src, 2 / 3.0), src->color);
-		*part3 = edge_segment_linear(edge_segment_point(src, 2 / 3.0), src->p[1], src->color);
+		*part1 = edge_segment_linear(src->p[0], edge_segment_point(src, 1/3.0), src->color);
+		*part2 = edge_segment_linear(edge_segment_point(src, 1/3.0), edge_segment_point(src, 2/3.0), src->color);
+		*part3 = edge_segment_linear(edge_segment_point(src, 2/3.0), src->p[1], src->color);
 		break;
 	}
 	case EDGE_TYPE_QUADRATIC:
 	{
-		*part1 = edge_segment_quadratic(src->p[0], vec2_mix(src->p[0], src->p[1], 1 / 3.0), edge_segment_point(src, 1 / 3.0), src->color);
-		*part2 = edge_segment_quadratic(edge_segment_point(src, 1 / 3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 5 / 9.0), vec2_mix(src->p[1], src->p[2], 4 / 9.0), 0.5), edge_segment_point(src, 2 / 3.0), src->color);
-		*part3 = edge_segment_quadratic(edge_segment_point(src, 2 / 3.0), vec2_mix(src->p[1], src->p[2], 2 / 3.0), src->p[2], src->color);
+		*part1 = edge_segment_quadratic(src->p[0], vec2_mix(src->p[0], src->p[1], 1/3.0), edge_segment_point(src, 1/3.0), src->color);
+		*part2 = edge_segment_quadratic(edge_segment_point(src, 1/3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 5/9.0), vec2_mix(src->p[1], src->p[2], 4/9.0), 0.5), edge_segment_point(src, 2/3.0), src->color);
+		*part3 = edge_segment_quadratic(edge_segment_point(src, 2/3.0), vec2_mix(src->p[1], src->p[2], 2/3.0), src->p[2], src->color);
 		break;
 	}
 	case EDGE_TYPE_CUBIC:
 	{
-		*part1 = edge_segment_cubic(src->p[0], vec2_eql(src->p[0], src->p[1]) ? src->p[0] : vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(src->p[1], src->p[2], 1 / 3.0), 1 / 3.0), edge_segment_point(src, 1 / 3.0), src->color);
-		*part2 = edge_segment_cubic(edge_segment_point(src, 1 / 3.0),
-			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 1 / 3.0), vec2_mix(src->p[1], src->p[2], 1 / 3.0), 1 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 1 / 3.0), vec2_mix(src->p[2], src->p[3], 1 / 3.0), 1 / 3.0), 2 / 3.0),
-			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 2 / 3.0), vec2_mix(src->p[1], src->p[2], 2 / 3.0), 2 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2 / 3.0), vec2_mix(src->p[2], src->p[3], 2 / 3.0), 2 / 3.0), 1 / 3.0),
-			edge_segment_point(src, 2 / 3.0), src->color);
-		*part3 = edge_segment_cubic(edge_segment_point(src, 2 / 3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2 / 3.0), vec2_mix(src->p[2], src->p[3], 2 / 3.0), 2 / 3.0), vec2_eql(src->p[2], src->p[3]) ? src->p[3] : vec2_mix(src->p[2], src->p[3], 2 / 3.0), src->p[3], src->color);
+		*part1 = edge_segment_cubic(src->p[0], vec2_eql(src->p[0], src->p[1]) ? src->p[0] : vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(src->p[1], src->p[2], 1/3.0), 1/3.0), edge_segment_point(src, 1/3.0), src->color);
+		*part2 = edge_segment_cubic(edge_segment_point(src, 1/3.0),
+			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(src->p[1], src->p[2], 1/3.0), 1/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 1/3.0), vec2_mix(src->p[2], src->p[3], 1/3.0), 1/3.0), 2/3.0),
+			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 2/3.0), vec2_mix(src->p[1], src->p[2], 2/3.0), 2/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2/3.0), vec2_mix(src->p[2], src->p[3], 2/3.0), 2/3.0), 1/3.0),
+			edge_segment_point(src, 2/3.0), src->color);
+		*part3 = edge_segment_cubic(edge_segment_point(src, 2/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2/3.0), vec2_mix(src->p[2], src->p[3], 2/3.0), 2/3.0), vec2_eql(src->p[2], src->p[3]) ? src->p[3] : vec2_mix(src->p[2], src->p[3], 2/3.0), src->p[3], src->color);
 		break;
 	}
 	}
@@ -141,9 +141,9 @@ typedef struct {
 
 int contour_add_edge(contour_t *contour, edge_segment_t edge) {
 	int count = ++contour->edge_count;
-	contour->edges = realloc(contour->edges, sizeof(edge_segment_t) * count);
-	contour->edges[count - 1] = edge;
-	return count - 1; // index
+	contour->edges = realloc(contour->edges, sizeof(edge_segment_t)*count);
+	contour->edges[count-1] = edge;
+	return count-1; // index
 }
 
 void free_contour(contour_t *contour) {
@@ -158,9 +158,9 @@ typedef struct {
 
 int shape_add_contour(shape_t *shape, contour_t contour) {
 	int count = ++shape->contour_count;
-	shape->contours = realloc(shape->contours, sizeof(contour_t) * count);
-	shape->contours[count - 1] = contour;
-	return count - 1; // index
+	shape->contours = realloc(shape->contours, sizeof(contour_t)*count);
+	shape->contours[count-1] = contour;
+	return count-1; // index
 }
 
 void free_shape(shape_t *shape) {
@@ -176,10 +176,10 @@ typedef struct {
 	contour_t *contour;
 } context_t;
 
-#define F26DOT6_TO_FLOAT(x) (1/64.0f*(float)x)
+#define F26DOT6_TO_DOUBLE(x) (1/64.0*(double)x)
 
 inline vec2 ftPoint2(const FT_Vector *vector) {
-	return (vec2){F26DOT6_TO_FLOAT(vector->x), F26DOT6_TO_FLOAT(vector->y)};
+	return (vec2){ F26DOT6_TO_DOUBLE(vector->x), F26DOT6_TO_DOUBLE(vector->y)};
 }
 
 int tinymsdf_move_to(const FT_Vector *to, void *user)
@@ -248,7 +248,7 @@ tinymsdf_error_t tinymsdf_load_glyph(shape_t *shape, FT_Face face, unicode_t uni
 	for (int i = 0; i < shape->contour_count; i++) {
 		contour_t *contour = &shape->contours[i];
 		if (contour->edge_count != 0) {
-			vec2 corner = edge_segment_point(&contour->edges[contour->edge_count - 1], 1);
+			vec2 corner = edge_segment_point(&contour->edges[contour->edge_count-1], 1);
 			for (int j = 0; j < contour->edge_count; j++) {
 				edge_segment_t *edge = &contour->edges[j];
 				if (!vec2_eql(edge_segment_point(edge, 0), corner))
@@ -275,8 +275,8 @@ tinymsdf_error_t tinymsdf_load_glyph(shape_t *shape, FT_Face face, unicode_t uni
 }
 
 tinymsdf_error_t tinymsdf_create_bitmap(float **pixels, int width, int height, int components) {
-	*pixels = malloc(sizeof(float) * components * width * height);
-	memset(*pixels, 0.0f, sizeof(float) * components * width * height);
+	*pixels = malloc(sizeof(float)*components*width*height);
+	memset(*pixels, 0.0f, sizeof(float)*components*width*height);
 	return TINYMSDF_SUCCESS;
 }
 
