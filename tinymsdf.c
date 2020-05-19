@@ -1,6 +1,7 @@
 #include "tinymsdf.h"
 
 #include <math.h>
+#include <stdbool.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H
@@ -12,6 +13,17 @@
 typedef struct {
 	double x, y;
 } vec2;
+
+double vec2_len(vec2 a) {
+	return sqrt(a.x * a.x + a.y * a.y);
+}
+
+vec2 vec2_norm(vec2 a, bool allowZero /*= false */) {
+	double len = vec2_len(a);
+	if (len == 0)
+		return (vec2){0, !allowZero};
+	return (vec2) {a.x / len, a.y / len};
+}
 
 vec2 vec2_add(vec2 a, vec2 b) {
 	return (vec2){a.x+b.x, a.y+b.y};
@@ -58,19 +70,23 @@ typedef enum {
 } edge_type_t;
 
 typedef struct {
+	double l, b, r, t;
+} bounds_t;
+
+typedef struct {
 	edge_color_t color;
 	edge_type_t type;
 	vec2 p[4];
 } edge_segment_t;
 
-edge_segment_t edge_segment_linear(vec2 p0, vec2 p1, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+edge_segment_t edge_segment_linear(vec2 p0, vec2 p1, edge_color_t color /*= EDGE_COLOR_WHITE*/) {
 	edge_segment_t edge_segment = {color, EDGE_TYPE_LINEAR};
 	edge_segment.p[0] = p0;
 	edge_segment.p[1] = p1;
 	return edge_segment;
 }
 
-edge_segment_t edge_segment_quadratic(vec2 p0, vec2 p1, vec2 p2, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+edge_segment_t edge_segment_quadratic(vec2 p0, vec2 p1, vec2 p2, edge_color_t color /*= EDGE_COLOR_WHITE*/) {
 	if (vec2_eql(p1, p0) || vec2_eql(p1, p2))
 		p1 = vec2_mul(0.5f, vec2_add(p0, p2));
 	
@@ -81,7 +97,7 @@ edge_segment_t edge_segment_quadratic(vec2 p0, vec2 p1, vec2 p2, edge_color_t co
 	return edge_segment;
 }
 
-edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3, edge_color_t color /* = EDGE_COLOR_WHITE*/) {
+edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3, edge_color_t color /*= EDGE_COLOR_WHITE*/) {
 	edge_segment_t edge_segment = {color, EDGE_TYPE_CUBIC};
 	edge_segment.p[0] = p0;
 	edge_segment.p[1] = p1;
@@ -90,6 +106,7 @@ edge_segment_t edge_segment_cubic(vec2 p0, vec2 p1, vec2 p2, vec2 p3, edge_color
 	return edge_segment;
 }
 
+/// Returns the point on the edge specified by the parameter (between 0 and 1).
 vec2 edge_segment_point(const edge_segment_t *edge, double param) {
 	switch (edge->type) {
 	case EDGE_TYPE_LINEAR:
@@ -104,31 +121,102 @@ vec2 edge_segment_point(const edge_segment_t *edge, double param) {
 	}
 }
 
+/// Returns the direction the edge has at the point specified by the parameter.
+vec2 edge_segment_direction(const edge_segment_t *edge, double param) {
+	switch (edge->type) {
+	case EDGE_TYPE_LINEAR:
+		return vec2_sub(edge->p[1], edge->p[0]);
+	case EDGE_TYPE_QUADRATIC:
+	{
+		vec2 tangent = vec2_mix(vec2_sub(edge->p[1], edge->p[0]), vec2_sub(edge->p[2], edge->p[1]), param);
+		if (!(!tangent.x && !tangent.y))
+			return vec2_sub(edge->p[2], edge->p[0]);
+		return tangent;
+	}
+	case EDGE_TYPE_CUBIC:
+	{
+		vec2 tangent = vec2_mix(vec2_mix(vec2_sub(edge->p[1], edge->p[0]), vec2_sub(edge->p[2], edge->p[1]), param), vec2_mix(vec2_sub(edge->p[2], edge->p[1]), vec2_sub(edge->p[3], edge->p[2]), param), param);
+		if (!(!tangent.x && !tangent.y)) {
+			if (param == 0) return vec2_sub(edge->p[2], edge->p[0]);
+			if (param == 1) return vec2_sub(edge->p[3], edge->p[1]);
+		}
+		return tangent;
+	}
+	}
+}
+
 /// Splits the edge segments into thirds which together represent the original edge.
-void edge_segment_split_in_thirds(const edge_segment_t *src, edge_segment_t *part1, edge_segment_t *part2, edge_segment_t *part3) {
-	switch (src->type) {
+void edge_segment_split_in_thirds(const edge_segment_t *edge, edge_segment_t *part1, edge_segment_t *part2, edge_segment_t *part3) {
+	switch (edge->type) {
 	case EDGE_TYPE_LINEAR:
 	{
-		*part1 = edge_segment_linear(src->p[0], edge_segment_point(src, 1/3.0), src->color);
-		*part2 = edge_segment_linear(edge_segment_point(src, 1/3.0), edge_segment_point(src, 2/3.0), src->color);
-		*part3 = edge_segment_linear(edge_segment_point(src, 2/3.0), src->p[1], src->color);
+		*part1 = edge_segment_linear(edge->p[0], edge_segment_point(edge, 1/3.0), edge->color);
+		*part2 = edge_segment_linear(edge_segment_point(edge, 1/3.0), edge_segment_point(edge, 2/3.0), edge->color);
+		*part3 = edge_segment_linear(edge_segment_point(edge, 2/3.0), edge->p[1], edge->color);
 		break;
 	}
 	case EDGE_TYPE_QUADRATIC:
 	{
-		*part1 = edge_segment_quadratic(src->p[0], vec2_mix(src->p[0], src->p[1], 1/3.0), edge_segment_point(src, 1/3.0), src->color);
-		*part2 = edge_segment_quadratic(edge_segment_point(src, 1/3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 5/9.0), vec2_mix(src->p[1], src->p[2], 4/9.0), 0.5), edge_segment_point(src, 2/3.0), src->color);
-		*part3 = edge_segment_quadratic(edge_segment_point(src, 2/3.0), vec2_mix(src->p[1], src->p[2], 2/3.0), src->p[2], src->color);
+		*part1 = edge_segment_quadratic(edge->p[0], vec2_mix(edge->p[0], edge->p[1], 1/3.0), edge_segment_point(edge, 1/3.0), edge->color);
+		*part2 = edge_segment_quadratic(edge_segment_point(edge, 1/3.0), vec2_mix(vec2_mix(edge->p[0], edge->p[1], 5/9.0), vec2_mix(edge->p[1], edge->p[2], 4/9.0), 0.5), edge_segment_point(edge, 2/3.0), edge->color);
+		*part3 = edge_segment_quadratic(edge_segment_point(edge, 2/3.0), vec2_mix(edge->p[1], edge->p[2], 2/3.0), edge->p[2], edge->color);
 		break;
 	}
 	case EDGE_TYPE_CUBIC:
 	{
-		*part1 = edge_segment_cubic(src->p[0], vec2_eql(src->p[0], src->p[1]) ? src->p[0] : vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(src->p[1], src->p[2], 1/3.0), 1/3.0), edge_segment_point(src, 1/3.0), src->color);
-		*part2 = edge_segment_cubic(edge_segment_point(src, 1/3.0),
-			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 1/3.0), vec2_mix(src->p[1], src->p[2], 1/3.0), 1/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 1/3.0), vec2_mix(src->p[2], src->p[3], 1/3.0), 1/3.0), 2/3.0),
-			vec2_mix(vec2_mix(vec2_mix(src->p[0], src->p[1], 2/3.0), vec2_mix(src->p[1], src->p[2], 2/3.0), 2/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2/3.0), vec2_mix(src->p[2], src->p[3], 2/3.0), 2/3.0), 1/3.0),
-			edge_segment_point(src, 2/3.0), src->color);
-		*part3 = edge_segment_cubic(edge_segment_point(src, 2/3.0), vec2_mix(vec2_mix(src->p[1], src->p[2], 2/3.0), vec2_mix(src->p[2], src->p[3], 2/3.0), 2/3.0), vec2_eql(src->p[2], src->p[3]) ? src->p[3] : vec2_mix(src->p[2], src->p[3], 2/3.0), src->p[3], src->color);
+		*part1 = edge_segment_cubic(edge->p[0], vec2_eql(edge->p[0], edge->p[1]) ? edge->p[0] : vec2_mix(edge->p[0], edge->p[1], 1/3.0), vec2_mix(vec2_mix(edge->p[0], edge->p[1], 1/3.0), vec2_mix(edge->p[1], edge->p[2], 1/3.0), 1/3.0), edge_segment_point(edge, 1/3.0), edge->color);
+		*part2 = edge_segment_cubic(edge_segment_point(edge, 1/3.0),
+			vec2_mix(vec2_mix(vec2_mix(edge->p[0], edge->p[1], 1/3.0), vec2_mix(edge->p[1], edge->p[2], 1/3.0), 1/3.0), vec2_mix(vec2_mix(edge->p[1], edge->p[2], 1/3.0), vec2_mix(edge->p[2], edge->p[3], 1/3.0), 1/3.0), 2/3.0),
+			vec2_mix(vec2_mix(vec2_mix(edge->p[0], edge->p[1], 2/3.0), vec2_mix(edge->p[1], edge->p[2], 2/3.0), 2/3.0), vec2_mix(vec2_mix(edge->p[1], edge->p[2], 2/3.0), vec2_mix(edge->p[2], edge->p[3], 2/3.0), 2/3.0), 1/3.0),
+			edge_segment_point(edge, 2/3.0), edge->color);
+		*part3 = edge_segment_cubic(edge_segment_point(edge, 2/3.0), vec2_mix(vec2_mix(edge->p[1], edge->p[2], 2/3.0), vec2_mix(edge->p[2], edge->p[3], 2/3.0), 2/3.0), vec2_eql(edge->p[2], edge->p[3]) ? edge->p[3] : vec2_mix(edge->p[2], edge->p[3], 2/3.0), edge->p[3], edge->color);
+		break;
+	}
+	}
+}
+
+/// Adjusts the bounding box to fit the edge segment.
+void edge_segment_bound(const edge_segment_t *edge, bounds_t *bound) {
+	switch (edge->type) {
+	case EDGE_TYPE_LINEAR:
+	{
+		pointBounds(edge->p[0], bound);
+		pointBounds(edge->p[1], bound);
+		break;
+	}
+	case EDGE_TYPE_QUADRATIC:
+	{
+		pointBounds(edge->p[0], bound);
+		pointBounds(edge->p[2], bound);
+		vec2 bot = (edge->p[1] - edge->p[0]) - (edge->p[2] - edge->p[1]);
+		if (bot.x) {
+			double param = (edge->p[1].x - edge->p[0].x) / bot.x;
+			if (param > 0 && param < 1)
+				pointBounds(point(param), bound);
+		}
+		if (bot.y) {
+			double param = (edge->p[1].y - edge->p[0].y) / bot.y;
+			if (param > 0 && param < 1)
+				pointBounds(point(param), bound);
+		}
+		break;
+	}
+	case EDGE_TYPE_CUBIC:
+	{
+		pointBounds(edge->p[0], bound);
+		pointBounds(edge->p[3], bound);
+		vec2 a0 = edge->p[1] - edge->p[0];
+		vec2 a1 = 2 * (edge->p[2] - edge->p[1] - a0);
+		vec2 a2 = edge->p[3] - 3 * edge->p[2] + 3 * edge->p[1] - edge->p[0];
+		double params[2];
+		auto solutions = solveQuadratic(params, a2.x, a1.x, a0.x);
+		for (int i = 0; i < solutions; ++i)
+			if (params[i] > 0 && params[i] < 1)
+				pointBounds(point(params[i]), bound);
+		solutions = solveQuadratic(params, a2.y, a1.y, a0.y);
+		for (int i = 0; i < solutions; ++i)
+			if (params[i] > 0 && params[i] < 1)
+				pointBounds(point(params[i]), bound);
 		break;
 	}
 	}
@@ -168,6 +256,55 @@ void free_shape(shape_t *shape) {
 		free_contour(&shape->contours[i]);
 	free(shape->contours), shape->contours = NULL;
 	shape->contour_count = 0;
+}
+
+/// Adjusts the bounding box to fit the shape.
+void shape_bound(shape_t *shape, bounds_t *bound) {
+	for (int i = 0; i < shape->contour_count; i++) {
+		contour_t *contour = &shape->contours[i];
+		for (int j = 0; j < contour->edge_count; j++) {
+			edge_segment_bound(&contour->edges[j], bound);
+		}
+	}
+	
+}
+
+/// Adjusts the bounding box to fit the shape border's mitered corners.
+void shape_bound_miters(shape_t *shape, bounds_t *bound, double border, double miterLimit, int polarity) {
+	for (int i = 0; i < shape->contour_count; i++) {
+		contour_t *contour = &shape->contours[i];
+		if (contour->edge_count == 0)
+			return;
+		auto prevDir = vec2_norm(edge_segment_direction(&contour->edges[contour->edge_count - 1], 1), true);
+		for (int j = 0; j < contour->edge_count; j++) {
+			edge_segment_t *edge = &contour->edges[j];
+			
+			vec2 dir = -vec2_norm(edge_segment_direction(edge, 0), true);
+			if (polarity * crossProduct(prevDir, dir) >= 0) {
+				double miterLength = miterLimit;
+				double q = 0.5 * (1 - dotProduct(prevDir, dir));
+				if (q > 0)
+					miterLength = min(1 / sqrt(q), miterLimit);
+				vec2 miter = vec2_norm(edge_segment_point(edge, 0) + border * miterLength * (prevDir + dir), true);
+				boundPoint(bound, miter);
+			}
+			prevDir = vec2_norm(edge_segment_direction(edge, 1), true);
+		}
+	}
+}
+
+/// Computes the minimum bounding box that fits the shape, optionally with a (mitered) border.
+bounds_t shape_get_bounds(shape_t *shape, double border /*= 0*/, double miterLimit /*= 0*/, int polarity /*= 0*/) {
+#define LARGE_VALUE 1e240
+	bounds_t bounds = {+LARGE_VALUE, +LARGE_VALUE, -LARGE_VALUE, -LARGE_VALUE};
+	shape_bound(shape, &bounds);
+	if (border > 0) {
+		bounds.l -= border, bounds.b -= border;
+		bounds.r += border, bounds.t += border;
+		if (miterLimit > 0)
+			shape_bound_miters(shape, &bounds, border, miterLimit, polarity);
+	}
+	return bounds;
 }
 
 typedef struct {
@@ -282,6 +419,9 @@ tinymsdf_error_t tinymsdf_create_bitmap(float **pixels, int width, int height, i
 
 tinymsdf_error_t tinymsdf_generate_mtsdf(float *pixels, int width, int height, FT_Face face, unicode_t unicode)
 {
+	vec2 scale = {1.0, 1.0};
+	bool autoFrame = true;
+	
 	shape_t shape = {NULL, 0};
 	tinymsdf_error_t error = tinymsdf_load_glyph(&shape, face, unicode);
 	if (error)
@@ -290,6 +430,9 @@ tinymsdf_error_t tinymsdf_generate_mtsdf(float *pixels, int width, int height, F
 	error = tinymsdf_create_bitmap(&pixels, width, height, 4);
 	if (error)
 		goto error_exit;
+
+	double avgScale = 0.5 * (scale.x + scale.y);
+	bounds_t bounds = shape_get_bounds(&shape, 0, 0, 0);
 
 error_exit:
 	free_shape(&shape);
