@@ -1,6 +1,9 @@
+#include <stdint.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <tinymsdf.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 int main(int argc, const char **argv) {
 #define ABORT(msg) { printf(msg); return 1; }
@@ -23,7 +26,7 @@ int main(int argc, const char **argv) {
 	}
 
 	float *pixels = NULL;
-	if (tinymsdf_generate_mtsdf(pixels, width, height, face, unicode)) {
+	if (tinymsdf_generate_mtsdf(&pixels, width, height, face, unicode)) {
 		FT_Done_Face(face);
 		FT_Done_FreeType(library);
 		ABORT("Failed to load glyph from font file");
@@ -31,6 +34,20 @@ int main(int argc, const char **argv) {
 
 	FT_Done_Face(face);
 	FT_Done_FreeType(library);
-	
+
+	uint8_t *bitmap = malloc(4 * width * height);
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			size_t index = 4 * ((y * height) + x);
+			bitmap[index + 0] = (uint8_t)(255 * (pixels[index + 0] + height) / height);
+			bitmap[index + 1] = (uint8_t)(255 * (pixels[index + 1] + height) / height);
+			bitmap[index + 2] = (uint8_t)(255 * (pixels[index + 2] + height) / height);
+			bitmap[index + 3] = (uint8_t)(255 * (pixels[index + 3] + height) / height);
+		}
+	}
+	stbi_write_png(output, width, height, 4, bitmap, width * 4);
+	free(bitmap);
+
+	free(pixels);
 	return 0;
 }

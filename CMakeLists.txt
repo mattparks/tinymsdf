@@ -21,7 +21,7 @@ target_include_directories(tinymsdf PUBLIC
 target_link_libraries(tinymsdf PUBLIC ${FREETYPE_LIBRARIES})
 
 if(BUILD_TINYMSDF_EXAMPLE)
-	add_executable(tinymsdf-example main.c)
+	add_executable(tinymsdf-example stb_image_write.h main.c)
 	set_target_properties(tinymsdf-example PROPERTIES OUTPUT_NAME tinymsdf)
 	target_include_directories(tinymsdf-example PUBLIC
 			$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/example>
