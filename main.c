@@ -8,7 +8,7 @@ int main(int argc, const char **argv) {
 	const char *input = "D:\\Workspaces\\Mattparks\\tinymsdf\\fonts\\Roboto-Regular.ttf";
 	const char *output = "output.png";
 	const char *testRender = "test.png";
-	unicode_t unicode = 'y';
+	unicode_t unicode = 'p';
 	int width = 26, height = 26;
 	int testWidth = 512, testHeight = 512;
 
