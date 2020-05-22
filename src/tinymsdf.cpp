@@ -254,13 +254,13 @@ int SolveCubicNormed(double x[3], double a, double b, double c) {
 		x[2] = q * std::cos((t - 2 * M_PI) / 3) - a;
 		return 3;
 	} else {
-		A = -std::pow(std::fabs(r) + std::sqrt(r2 - q3), 1 / 3.);
+		A = -std::pow(std::fabs(r) + std::sqrt(r2 - q3), 1 / 3.0);
 		if (r < 0) A = -A;
 		B = A == 0 ? 0 : q / A;
 		a /= 3;
 		x[0] = (A + B) - a;
 		x[1] = -0.5 * (A + B) - a;
-		x[2] = 0.5 * std::sqrt(3.) * (A - B);
+		x[2] = 0.5 * std::sqrt(3.0) * (A - B);
 		if (std::fabs(x[2]) < 1e-14)
 			return 2;
 		return 1;
@@ -349,7 +349,7 @@ public:
 			Vector2 aq = origin - p[0];
 			Vector2 ab = p[1] - p[0];
 			param = aq.Dot(ab) / ab.Dot(ab);
-			Vector2 eq = p[param > .5] - origin;
+			Vector2 eq = p[param > 0.5] - origin;
 			double endpointDistance = eq.Length();
 			if (param > 0 && param < 1) {
 				double orthoDistance = ab.Orthonormal().Dot(aq);
@@ -436,7 +436,7 @@ public:
 
 			if (param >= 0 && param <= 1)
 				return SignedDistance(minDistance, 0);
-			if (param < .5)
+			if (param < 0.5)
 				return SignedDistance(minDistance, std::fabs(Direction(0).Normalize().Dot(qa.Normalize())));
 			else
 				return SignedDistance(minDistance, std::fabs(Direction(1).Normalize().Dot((p[3] - origin).Normalize())));
@@ -579,12 +579,12 @@ public:
 			return 0;
 		double total = 0;
 		if (edges.size() == 1) {
-			Vector2 a = edges[0].Point(0), b = edges[0].Point(1 / 3.), c = edges[0].Point(2 / 3.);
+			Vector2 a = edges[0].Point(0), b = edges[0].Point(1 / 3.0), c = edges[0].Point(2 / 3.0);
 			total += Shoelace(a, b);
 			total += Shoelace(b, c);
 			total += Shoelace(c, a);
 		} else if (edges.size() == 2) {
-			Vector2 a = edges[0].Point(0), b = edges[0].Point(.5), c = edges[1].Point(0), d = edges[1].Point(.5);
+			Vector2 a = edges[0].Point(0), b = edges[0].Point(0.5), c = edges[1].Point(0), d = edges[1].Point(0.5);
 			total += Shoelace(a, b);
 			total += Shoelace(b, c);
 			total += Shoelace(c, d);
@@ -748,7 +748,7 @@ void AutoFrame(const Shape &shape, int width, int height, double pxRange, Vector
 bool IsCorner(Vector2 aDir, Vector2 bDir, double crossThreshold) {
 	return aDir.Dot(bDir) <= 0 || std::fabs(aDir.Cross(bDir)) > crossThreshold;
 }
-void SwitchColor(EdgeColor &color, unsigned long long &seed, EdgeColor banned = BLACK) {
+void SwitchColor(EdgeColor &color, uint64_t &seed, EdgeColor banned = BLACK) {
 	EdgeColor combined = EdgeColor(color & banned);
 	if (combined == RED || combined == GREEN || combined == BLUE) {
 		color = EdgeColor(combined ^ WHITE);
@@ -764,7 +764,7 @@ void SwitchColor(EdgeColor &color, unsigned long long &seed, EdgeColor banned = 
 	color = EdgeColor((shifted | shifted >> 3) & WHITE);
 	seed >>= 1;
 }
-void EdgeColoringSimple(Shape &shape, double angleThreshold, unsigned long long seed) {
+void EdgeColoringSimple(Shape &shape, double angleThreshold, uint64_t seed) {
 	double crossThreshold = std::sin(angleThreshold);
 	std::vector<int> corners;
 	for (auto &contour : shape.contours) {
@@ -793,7 +793,7 @@ void EdgeColoringSimple(Shape &shape, double angleThreshold, unsigned long long 
 			if (contour.edges.size() >= 3) {
 				int m = (int)contour.edges.size();
 				for (int i = 0; i < m; ++i)
-					contour.edges[(corner + i) % m].color = (colors + 1)[int(3 + 2.875 * i / (m - 1) - 1.4375 + .5) - 3];
+					contour.edges[(corner + i) % m].color = (colors + 1)[int(3 + 2.875 * i / (m - 1) - 1.4375 + 0.5) - 3];
 			} else if (contour.edges.size() >= 1) {
 				// Less than three edge segments for three colors => edges must be split
 				std::optional<EdgeSegment> parts[7];
@@ -871,7 +871,7 @@ void GenerateDistanceFieldPseudoSDF(Bitmap<float, 1> &output, const Shape &shape
 			}
 			if (nearEdge)
 				nearEdge->DistanceToPseudoDistance(minDistance, p, nearParam);
-			*output(x, row) = float(minDistance.distance / range + .5);
+			*output(x, row) = float(minDistance.distance / range + 0.5);
 		}
 	}
 }
@@ -1052,7 +1052,7 @@ bool GenerateSDF(Bitmap<float, 1> &output, FT_Face face, unicode_t unicode) {
 	double range = pxRange / std::min(scale.x, scale.y);
 
 	double angleThreshold = 3;
-	unsigned long long coloringSeed = 0;
+	uint64_t coloringSeed = 0;
 	EdgeColoringSimple(shape, angleThreshold, coloringSeed);
 
 	GenerateDistanceFieldSDF(output, shape, range, scale, translate);
@@ -1074,7 +1074,7 @@ bool GeneratePseudoSDF(Bitmap<float, 1> &output, FT_Face face, unicode_t unicode
 	double range = pxRange / std::min(scale.x, scale.y);
 
 	double angleThreshold = 3;
-	unsigned long long coloringSeed = 0;
+	uint64_t coloringSeed = 0;
 	EdgeColoringSimple(shape, angleThreshold, coloringSeed);
 
 	GenerateDistanceFieldPseudoSDF(output, shape, range, scale, translate);
@@ -1082,7 +1082,7 @@ bool GeneratePseudoSDF(Bitmap<float, 1> &output, FT_Face face, unicode_t unicode
 	return false;
 }
 
-bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode) {
+bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode, double edgeThreshold) {
 	auto shape = LoadGlyph(face, unicode);
 
 	// Validate and normalize shape
@@ -1096,10 +1096,9 @@ bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode) {
 	double range = pxRange / std::min(scale.x, scale.y);
 
 	double angleThreshold = 3;
-	unsigned long long coloringSeed = 0;
+	uint64_t coloringSeed = 0;
 	EdgeColoringSimple(shape, angleThreshold, coloringSeed);
 
-	double edgeThreshold = DEFAULT_ERROR_CORRECTION_THRESHOLD;
 	GenerateDistanceFieldMSDF(output, shape, range, scale, translate);
 	if (edgeThreshold > 0)
 		MsdfErrorCorrection(output, edgeThreshold / (scale * range));
@@ -1107,7 +1106,7 @@ bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode) {
 	return false;
 }
 
-bool GenerateMTSDF(Bitmap<float, 4> &output, FT_Face face, unicode_t unicode) {
+bool GenerateMTSDF(Bitmap<float, 4> &output, FT_Face face, unicode_t unicode, double edgeThreshold) {
 	auto shape = LoadGlyph(face, unicode);
 
 	// Validate and normalize shape
@@ -1121,10 +1120,9 @@ bool GenerateMTSDF(Bitmap<float, 4> &output, FT_Face face, unicode_t unicode) {
 	double range = pxRange / std::min(scale.x, scale.y);
 
 	double angleThreshold = 3;
-	unsigned long long coloringSeed = 0;
+	uint64_t coloringSeed = 0;
 	EdgeColoringSimple(shape, angleThreshold, coloringSeed);
 
-	double edgeThreshold = DEFAULT_ERROR_CORRECTION_THRESHOLD;
 	GenerateDistanceFieldMTSDF(output, shape, range, scale, translate);
 	if (edgeThreshold > 0)
 		MsdfErrorCorrection(output, edgeThreshold / (scale * range));

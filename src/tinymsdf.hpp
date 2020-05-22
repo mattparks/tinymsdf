@@ -38,7 +38,7 @@ bool GenerateSDF(Bitmap<float, 1> &output, FT_Face face, unicode_t unicode);
 /// Generates a single-channel signed pseudo-distance field.
 bool GeneratePseudoSDF(Bitmap<float, 1> &output, FT_Face face, unicode_t unicode);
 /// Generates a multi-channel signed distance field.
-bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode);
+bool GenerateMSDF(Bitmap<float, 3> &output, FT_Face face, unicode_t unicode, double edgeThreshold = DEFAULT_ERROR_CORRECTION_THRESHOLD);
 /// Generates a multi-channel signed distance field with true distance in the alpha channel.
-bool GenerateMTSDF(Bitmap<float, 4> &output, FT_Face face, unicode_t unicode);
+bool GenerateMTSDF(Bitmap<float, 4> &output, FT_Face face, unicode_t unicode, double edgeThreshold = DEFAULT_ERROR_CORRECTION_THRESHOLD);
 }
